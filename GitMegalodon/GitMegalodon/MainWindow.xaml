@@ -52,17 +52,24 @@
                             <ColumnDefinition Width="300"/>
                         </Grid.ColumnDefinitions>
                         
-                        <!-- Commit Graph -->
-                        <ListView x:Name="CommitsList" Grid.Column="0" Background="Transparent" SelectionChanged="CommitsList_SelectionChanged">
-                            <ListView.View>
-                                <GridView>
-                                    <GridViewColumn Header="Hash" Width="80" DisplayMemberBinding="{Binding ShortHash}"/>
-                                    <GridViewColumn Header="Message" Width="300" DisplayMemberBinding="{Binding Message}"/>
-                                    <GridViewColumn Header="Author" Width="150" DisplayMemberBinding="{Binding Author}"/>
-                                    <GridViewColumn Header="Date" Width="150" DisplayMemberBinding="{Binding Date, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"/>
-                                </GridView>
-                            </ListView.View>
-                        </ListView>
+                        <!-- Commit Graph with overlay canvas -->
+                        <Grid Grid.Column="0">
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                <Grid>
+                                    <Canvas x:Name="CommitGraphCanvas" Background="#1E1E1E" MinHeight="500" MinWidth="800" />
+                                    <ListView x:Name="CommitsList" Background="Transparent" Opacity="0.7" SelectionChanged="CommitsList_SelectionChanged">
+                                        <ListView.View>
+                                            <GridView>
+                                                <GridViewColumn Header="Hash" Width="80" DisplayMemberBinding="{Binding ShortHash}"/>
+                                                <GridViewColumn Header="Message" Width="300" DisplayMemberBinding="{Binding Message}"/>
+                                                <GridViewColumn Header="Author" Width="150" DisplayMemberBinding="{Binding Author}"/>
+                                                <GridViewColumn Header="Date" Width="150" DisplayMemberBinding="{Binding Date, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"/>
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+                                </Grid>
+                            </ScrollViewer>
+                        </Grid>
                         
                         <!-- Commit Details -->
                         <DockPanel Grid.Column="1" Background="#252526">
