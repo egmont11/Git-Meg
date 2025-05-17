@@ -53,23 +53,29 @@
                             <ColumnDefinition Width="300"/>
                         </Grid.ColumnDefinitions>
                         
-                        <!-- Commit Graph with overlay canvas -->
+                        <!-- Commit Graph -->
                         <Grid Grid.Column="0">
-                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                                <Grid>
-                                    <Canvas x:Name="CommitGraphCanvas" Background="#1E1E1E" MinHeight="500" MinWidth="800" />
-                                    <ListView x:Name="CommitsList" Background="Transparent" Opacity="0.7" SelectionChanged="CommitsList_SelectionChanged">
-                                        <ListView.View>
-                                            <GridView>
-                                                <GridViewColumn Header="Hash" Width="80" DisplayMemberBinding="{Binding ShortHash}"/>
-                                                <GridViewColumn Header="Message" Width="300" DisplayMemberBinding="{Binding Message}"/>
-                                                <GridViewColumn Header="Author" Width="150" DisplayMemberBinding="{Binding Author}"/>
-                                                <GridViewColumn Header="Date" Width="150" DisplayMemberBinding="{Binding Date, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"/>
-                                            </GridView>
-                                        </ListView.View>
-                                    </ListView>
-                                </Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                <Canvas x:Name="CommitGraphCanvas" Background="#1E1E1E" MinHeight="500" MinWidth="800" />
                             </ScrollViewer>
+                            
+                            <!-- Traditional list view at the bottom -->
+                            <ListView x:Name="CommitsList" Grid.Row="1" Height="200" Background="#252526" 
+                                      SelectionChanged="CommitsList_SelectionChanged">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Header="Hash" Width="80" DisplayMemberBinding="{Binding ShortHash}"/>
+                                        <GridViewColumn Header="Message" Width="300" DisplayMemberBinding="{Binding Message}"/>
+                                        <GridViewColumn Header="Author" Width="150" DisplayMemberBinding="{Binding Author}"/>
+                                        <GridViewColumn Header="Date" Width="150" DisplayMemberBinding="{Binding Date, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"/>
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
                         </Grid>
                         
                         <!-- Commit Details -->

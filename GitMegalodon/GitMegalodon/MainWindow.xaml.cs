@@ -15,11 +15,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using Microsoft.WindowsAPICodePack.Dialogs;
 using GitMegalodon.Models;
-using Branch = GitMegalodon.Models.Branch;
-using Commit = GitMegalodon.Models.Commit;
-using Repository = GitMegalodon.Models.Repository;
 using Path = System.IO.Path;
-using CommitNode = GitMegalodon.Models.CommitNode;
 
 namespace GitMegalodon
 {
@@ -35,7 +31,6 @@ namespace GitMegalodon
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
         private const int DWMWA_MICA_EFFECT = 1029;
 
-        
         public ObservableCollection<string> RecentRepositories { get; set; }
         private Repository CurrentRepository { get; set; }
         private AppSettings Settings { get; set; }
@@ -62,25 +57,51 @@ namespace GitMegalodon
             // Load settings
             Settings = AppSettings.Load();
             LoadRecentRepositories();
-            
+
             // Apply the customization after window is loaded
             Loaded += MainWindow_Loaded;
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            IntPtr windowHandle = new WindowInteropHelper(this).Handle;
-        
-            // Enable Mica effect
-            int micaValue = 1; // 1 for enable, 0 for disable
-            DwmSetWindowAttribute(windowHandle, DWMWA_MICA_EFFECT, ref micaValue, sizeof(int));
-        
-            // Optional: Use dark title bar
-            int darkModeValue = 1; // 1 for dark mode, 0 for light mode
-            DwmSetWindowAttribute(windowHandle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkModeValue, sizeof(int));
+            try
+            {
+                IntPtr windowHandle = new WindowInteropHelper(this).Handle;
+
+                // Check if we're running on Windows 11 or later
+                if (IsWindows11OrLater())
+                {
+                    // Enable Mica effect
+                    int micaValue = 1; // 1 for enable, 0 for disable
+                    DwmSetWindowAttribute(windowHandle, DWMWA_MICA_EFFECT, ref micaValue, sizeof(int));
+
+                    // Optional: Use dark title bar
+                    int darkModeValue = 1; // 1 for dark mode, 0 for light mode
+                    DwmSetWindowAttribute(windowHandle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkModeValue, sizeof(int));
+                }
+            }
+            catch (Exception ex)
+            {
+                // Just log the error but don't stop the application
+                Debug.WriteLine($"Error applying window effects: {ex.Message}");
+            }
         }
 
-        
+        private bool IsWindows11OrLater()
+        {
+            try
+            {
+                // Windows 11 is version 10.0.22000 or higher
+                var os = Environment.OSVersion;
+                return os.Platform == PlatformID.Win32NT && 
+                       (os.Version.Major > 10 || (os.Version.Major == 10 && os.Version.Build >= 22000));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private void LoadRecentRepositories()
         {
             RecentRepositories.Clear();
@@ -147,7 +168,7 @@ namespace GitMegalodon
         private bool IsGitRepository(string path)
         {
             // Check if the folder contains a .git directory
-            return Directory.Exists(Path.Combine(path, ".git"));
+            return Directory.Exists(System.IO.Path.Combine(path, ".git"));
         }
 
         private async Task LoadRepositoryAsync(string repositoryPath)
@@ -245,30 +266,105 @@ namespace GitMegalodon
 
         private async Task LoadCommitHistoryAsync()
         {
-            if (CurrentRepository == null) return;
-
-            CommitsList.Items.Clear();
-            CurrentRepository.Commits.Clear();
-
-            // Get commit history
-            string output = await RunGitCommandAsync("log --pretty=format:\"%H|%an|%ad|%s\" --date=iso -n 50");
-
-            foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            try
             {
-                string[] parts = line.Split('|');
-                if (parts.Length >= 4)
-                {
-                    string hash = parts[0];
-                    string author = parts[1];
-                    DateTime date = DateTime.Parse(parts[2]);
-                    string message = parts[3];
-
-                    var commit = new Commit(hash, author, date, message);
-                    CurrentRepository.Commits.Add(commit);
-                    CommitsList.Items.Add(commit);
-                }
+                // Use a more reliable format string with clearer separators for parsing
+                string output = await RunGitCommandAsync("log --all --format=\"%H§%P§%an§%at§%s§%D\" --date=raw -n 100");
+                var commits = ParseGitLogOutput(output);
+                
+                // Display the commits in both the ListView and the graph
+                DisplayCommitTree(commits);
+                
+                // Update the traditional commit list
+                CommitsList.ItemsSource = commits.Select(c => new Commit(
+                    c.Hash, 
+                    c.Author, 
+                    c.Date, 
+                    c.Message
+                ));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading commit history: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
+        private List<CommitNode> ParseGitLogOutput(string output)
+        {
+            var commits = new List<CommitNode>();
+            var commitDict = new Dictionary<string, CommitNode>();
+            
+            // Split on new lines and process each commit
+            string[] lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            
+            foreach (string line in lines)
+            {
+                if (string.IsNullOrWhiteSpace(line)) 
+                    continue;
+                
+                // Use a special character that's unlikely to be in commit data
+                string[] parts = line.Split('§');
+                if (parts.Length < 5) 
+                    continue;
+                
+                string hash = parts[0];
+                string parentHashes = parts[1];
+                string author = parts[2];
+                
+                // Safely parse the timestamp
+                DateTime date;
+                if (long.TryParse(parts[3], out long timestamp))
+                {
+                    date = DateTimeOffset.FromUnixTimeSeconds(timestamp).DateTime;
+                }
+                else
+                {
+                    date = DateTime.Now; // Fallback if parsing fails
+                }
+                
+                string message = parts[4];
+                string refNames = parts.Length > 5 ? parts[5] : "";
+                
+                var commitNode = new CommitNode
+                {
+                    Hash = hash,
+                    Author = author,
+                    Date = date,
+                    Message = message,
+                    RefNames = refNames,
+                    GraphStructure = "" // We're not using the graph data from git log output
+                };
+                
+                // Add parent hashes
+                if (!string.IsNullOrEmpty(parentHashes))
+                {
+                    foreach (var parentHash in parentHashes.Split(' '))
+                    {
+                        if (!string.IsNullOrEmpty(parentHash))
+                            commitNode.ParentHashes.Add(parentHash);
+                    }
+                }
+                
+                commits.Add(commitNode);
+                commitDict[hash] = commitNode;
+            }
+            
+            // Link parents and children
+            foreach (var commit in commits)
+            {
+                foreach (var parentHash in commit.ParentHashes)
+                {
+                    if (commitDict.TryGetValue(parentHash, out CommitNode parent))
+                    {
+                        commit.Parents.Add(parent);
+                        parent.Children.Add(commit);
+                    }
+                }
+            }
+            
+            return commits;
+        }
+
 
         private async Task LoadChangesAsync()
         {
@@ -610,7 +706,7 @@ namespace GitMegalodon
                     // For untracked files, show the file content if it's text
                     try
                     {
-                        string filePath = Path.Combine(CurrentRepository.Path, change.Path);
+                        string filePath = System.IO.Path.Combine(CurrentRepository.Path, change.Path);
                         if (File.Exists(filePath))
                         {
                             // Simple check to see if it's a binary file
@@ -707,46 +803,62 @@ namespace GitMegalodon
                     "Commit Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-        
+
         private List<CommitNode> ParseGitLogGraphOutput(string output)
         {
             var commits = new List<CommitNode>();
             var commitDict = new Dictionary<string, CommitNode>();
-            var lines = output.Split('\n');
             
-            foreach (var line in lines)
+            string[] lines = output.Split('\n');
+            
+            foreach (string line in lines)
             {
                 // Skip empty lines
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 
-                // Extract the graph structure part (asterisks and pipes)
-                int commitIndex = line.IndexOf("commit ", StringComparison.OrdinalIgnoreCase);
-                if (commitIndex < 0) continue;
-                
-                string graphPart = line.Substring(0, commitIndex);
-                string dataPart = line.Substring(commitIndex);
-                
-                // Parse the commit data part
-                // Format: "commit HASH|PARENT_HASHES|AUTHOR|DATE|MESSAGE|REF_NAMES"
-                string[] parts = dataPart.Split('|');
-                if (parts.Length < 5) continue;
-
-                string hash = parts[0].Replace("commit ", "").Trim();
-                string parentHashes = parts.Length > 1 ? parts[1].Trim() : "";
-                string author = parts.Length > 2 ? parts[2].Trim() : "";
-                
-                // Parse date
-                DateTime date = DateTime.Now;
-                if (parts.Length > 3 && !string.IsNullOrEmpty(parts[3]))
+                // Parse the graph structure from the beginning of the line
+                int dataStart = line.IndexOf(';');
+                if (dataStart <= 0) 
                 {
-                    DateTime.TryParse(parts[3].Trim(), out date);
+                    // Try to find the hash at the beginning of the line
+                    var match = Regex.Match(line, @"[*|\\/_ ]+([a-f0-9]{40})");
+                    if (match.Success)
+                    {
+                        dataStart = match.Index + match.Length;
+                    }
+                    else
+                    {
+                        continue; // Skip lines we can't parse
+                    }
                 }
-                        
-                string message = parts.Length > 4 ? parts[4].Trim() : "";
-                string refNames = parts.Length > 5 ? parts[5].Trim() : "";
                 
-                // Create commit node
-                var commit = new CommitNode
+                // Get the graph structure part (everything before the hash)
+                string graphPart = line.Substring(0, dataStart);
+                
+                // Split the commit data
+                string[] parts = line.Substring(dataStart + 1).Split(';');
+                
+                if (parts.Length < 5) continue;
+                
+                string hash = parts[0];
+                string parentHashes = parts[1];
+                string author = parts[2];
+                
+                // Safely parse the timestamp
+                DateTime date;
+                if (long.TryParse(parts[3], out long timestamp))
+                {
+                    date = DateTimeOffset.FromUnixTimeSeconds(timestamp).DateTime;
+                }
+                else
+                {
+                    date = DateTime.Now; // Fallback if parsing fails
+                }
+                
+                string message = parts[4];
+                string refNames = parts.Length > 5 ? parts[5] : "";
+                
+                var commitNode = new CommitNode
                 {
                     Hash = hash,
                     Author = author,
@@ -756,20 +868,21 @@ namespace GitMegalodon
                     GraphStructure = graphPart
                 };
                 
-                // Parse parent hashes
-                if (!string.IsNullOrWhiteSpace(parentHashes))
+                // Add parent hashes
+                if (!string.IsNullOrEmpty(parentHashes))
                 {
-                    foreach (var parentHash in parentHashes.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                    foreach (var parentHash in parentHashes.Split(' '))
                     {
-                        commit.ParentHashes.Add(parentHash.Trim());
+                        if (!string.IsNullOrEmpty(parentHash))
+                            commitNode.ParentHashes.Add(parentHash);
                     }
                 }
                 
-                commits.Add(commit);
-                commitDict[hash] = commit;
+                commits.Add(commitNode);
+                commitDict[hash] = commitNode;
             }
             
-            // Set up parent-child relationships
+            // Link parents and children
             foreach (var commit in commits)
             {
                 foreach (var parentHash in commit.ParentHashes)
@@ -785,157 +898,256 @@ namespace GitMegalodon
             return commits;
         }
 
-    void DisplayCommitTree(List<CommitNode> commits)
-    {
-        // Clear previous visualization
-        CommitGraphCanvas.Children.Clear();
-        
-        if (commits == null || commits.Count == 0)
-            return;
-        
-        // Add CommitNode to ListView for selection
-        CommitsList.ItemsSource = commits;
-        
-        // Define layout properties
-        const double nodeWidth = 15;
-        const double nodeHeight = 15;
-        const double horizontalSpacing = 20;
-        const double rowHeight = 30;
-        
-        // Calculate positions for each commit based on their relationships
-        Dictionary<string, Point> nodePositions = CalculateCommitPositions(commits, horizontalSpacing, rowHeight);
-        
-        // Draw the connecting lines first (so they appear behind the nodes)
-        foreach (var commit in commits)
+
+        private void DisplayCommitTree(List<CommitNode> commits)
         {
-            if (!nodePositions.TryGetValue(commit.Hash, out Point position))
-                continue;
-                
-            foreach (var parent in commit.Parents)
+            // Clear the canvas
+            CommitGraphCanvas.Children.Clear();
+
+            if (commits == null || commits.Count == 0)
+                return;
+
+            // Configure visual parameters
+            double rowHeight = 30;
+            double columnWidth = 20;
+            double commitRadius = 5;
+
+            // Calculate positions for all commits
+            var commitPositions = CalculateCommitPositions(commits, columnWidth, rowHeight);
+
+            // Draw connections first (so they appear behind the commits)
+            foreach (var commit in commits)
             {
-                if (!nodePositions.TryGetValue(parent.Hash, out Point parentPosition))
-                    continue;
-                    
-                // Create line from this commit to its parent
-                var line = new Line
+                Point commitPoint = commitPositions[commit.Hash];
+
+                // Draw lines to each parent
+                foreach (var parent in commit.Parents)
                 {
-                    X1 = position.X + nodeWidth / 2,
-                    Y1 = position.Y + nodeHeight / 2,
-                    X2 = parentPosition.X + nodeWidth / 2,
-                    Y2 = parentPosition.Y + nodeHeight / 2,
-                    Stroke = GetBranchColor(commit),
-                    StrokeThickness = 2
-                };
-                
-                CommitGraphCanvas.Children.Add(line);
+                    if (commitPositions.TryGetValue(parent.Hash, out Point parentPoint))
+                    {
+                        if (parentPoint.Y > commitPoint.Y) // Direct parent
+                        {
+                            // Draw a straight line
+                            Line line = new Line
+                            {
+                                X1 = commitPoint.X,
+                                Y1 = commitPoint.Y + commitRadius,
+                                X2 = parentPoint.X,
+                                Y2 = parentPoint.Y - commitRadius,
+                                Stroke = GetBranchColor(commit),
+                                StrokeThickness = 2
+                            };
+                            CommitGraphCanvas.Children.Add(line);
+                        }
+                        else // Branch connection
+                        {
+                            // Create a path with curves for branch lines
+                            PathFigure figure = new PathFigure
+                            {
+                                StartPoint = new Point(commitPoint.X, commitPoint.Y + commitRadius)
+                            };
+
+                            // Determine if we need to route around other commits
+                            if (parentPoint.X != commitPoint.X)
+                            {
+                                // Add curve segments
+                                figure.Segments.Add(
+                                    new LineSegment(new Point(commitPoint.X, commitPoint.Y + rowHeight / 2), true));
+                                figure.Segments.Add(
+                                    new LineSegment(new Point(parentPoint.X, commitPoint.Y + rowHeight / 2), true));
+                                figure.Segments.Add(
+                                    new LineSegment(new Point(parentPoint.X, parentPoint.Y - commitRadius), true));
+                            }
+                            else
+                            {
+                                figure.Segments.Add(
+                                    new LineSegment(new Point(parentPoint.X, parentPoint.Y - commitRadius), true));
+                            }
+
+                            PathGeometry geometry = new PathGeometry();
+                            geometry.Figures.Add(figure);
+
+                            System.Windows.Shapes.Path path = new System.Windows.Shapes.Path
+                            {
+                                Data = geometry,
+                                Stroke = GetBranchColor(parent),
+                                StrokeThickness = 2
+                            };
+
+                            CommitGraphCanvas.Children.Add(path);
+                        }
+                    }
+                }
             }
-        }
-        
-        // Draw commit nodes
-        foreach (var commit in commits)
-        {
-            if (!nodePositions.TryGetValue(commit.Hash, out Point position))
-                continue;
-                
-            // Create an ellipse for each commit
-            var ellipse = new Ellipse
+
+            // Draw commit dots and labels
+            foreach (var commit in commits)
             {
-                Width = nodeWidth,
-                Height = nodeHeight,
-                Fill = GetBranchColor(commit),
-                Stroke = Brushes.White,
-                StrokeThickness = 1
-            };
-            
-            Canvas.SetLeft(ellipse, position.X);
-            Canvas.SetTop(ellipse, position.Y);
-            
-            // Add tooltip with commit info
-            ellipse.ToolTip = $"{commit.Hash.Substring(0, 7)}: {commit.Message}";
-            
-            // Add to canvas
-            CommitGraphCanvas.Children.Add(ellipse);
-            
-            // Add branch/tag labels if any
+                Point point = commitPositions[commit.Hash];
+
+                // Draw commit circle
+                Ellipse commitDot = new Ellipse
+                {
+                    Width = commitRadius * 2,
+                    Height = commitRadius * 2,
+                    Fill = GetBranchColor(commit),
+                    Stroke = Brushes.White,
+                    StrokeThickness = 1
+                };
+
+                Canvas.SetLeft(commitDot, point.X - commitRadius);
+                Canvas.SetTop(commitDot, point.Y - commitRadius);
+                CommitGraphCanvas.Children.Add(commitDot);
+
+                // Add branch/tag labels if present
+                if (!string.IsNullOrEmpty(commit.RefNames))
+                {
+                    var refLabels = commit.RefNames.Split(',');
+                    double labelOffset = 5;
+
+                    foreach (var refLabel in refLabels)
+                    {
+                        bool isTag = refLabel.Trim().StartsWith("tag:");
+                        bool isHead = refLabel.Trim().Contains("HEAD");
+
+                        Border labelBorder = new Border
+                        {
+                            Background = isTag ? Brushes.Yellow : isHead ? Brushes.Green : GetBranchColor(commit),
+                            BorderBrush = Brushes.White,
+                            BorderThickness = new Thickness(1),
+                            CornerRadius = new CornerRadius(8),
+                            Padding = new Thickness(5, 2, 5, 2)
+                        };
+
+                        TextBlock label = new TextBlock
+                        {
+                            Text = refLabel.Trim(),
+                            Foreground = isTag || isHead ? Brushes.Black : Brushes.White,
+                            FontSize = 10
+                        };
+
+                        labelBorder.Child = label;
+
+                        Canvas.SetLeft(labelBorder, point.X + commitRadius + 5);
+                        Canvas.SetTop(labelBorder, point.Y - 10 + labelOffset);
+                        CommitGraphCanvas.Children.Add(labelBorder);
+
+                        labelOffset += 20; // Offset for multiple labels
+                    }
+                }
+            }
+
+            // Set canvas size
+            CommitGraphCanvas.Width = 1000;
+            CommitGraphCanvas.Height = commits.Count * rowHeight + 50;
+        }
+
+        private Dictionary<string, Point> CalculateCommitPositions(List<CommitNode> commits, double columnWidth,
+            double rowHeight)
+        {
+            Dictionary<string, Point> positions = new Dictionary<string, Point>();
+            Dictionary<string, int> branchLanes = new Dictionary<string, int>();
+            int maxLane = 0;
+
+            // First pass: Assign vertical positions by commit order
+            for (int i = 0; i < commits.Count; i++)
+            {
+                var commit = commits[i];
+                int y = (i + 1) * (int)rowHeight;
+
+                // Get or assign a lane for this commit's branch
+                string branchKey = GetBranchKey(commit);
+                if (!branchLanes.TryGetValue(branchKey, out int lane))
+                {
+                    lane = maxLane++;
+                    branchLanes[branchKey] = lane;
+                }
+
+                int x = 100 + (lane * (int)columnWidth);
+                positions[commit.Hash] = new Point(x, y);
+            }
+
+            // Second pass: Adjust horizontal positions for merges and branches
+            foreach (var commit in commits)
+            {
+                // For merge commits, center them between the parent branches
+                if (commit.Parents.Count > 1)
+                {
+                    var parentsInView = commit.Parents.Where(p => positions.ContainsKey(p.Hash)).ToList();
+                    if (parentsInView.Count > 0)
+                    {
+                        double avgX = parentsInView.Average(p => positions[p.Hash].X);
+                        var position = positions[commit.Hash];
+                        positions[commit.Hash] = new Point(avgX, position.Y);
+                    }
+                }
+            }
+
+            return positions;
+        }
+        private string GetBranchKey(CommitNode commit)
+        {
+            // This is a simplified approach - in a real implementation, you would
+            // determine the branch based on commit's relationship to branches
             if (!string.IsNullOrEmpty(commit.RefNames))
             {
-                var label = new TextBlock
-                {
-                    Text = commit.RefNames.Replace("(", "").Replace(")", ""),
-                    Foreground = Brushes.White,
-                    Background = Brushes.DarkBlue,
-                    Padding = new Thickness(3),
-                    FontSize = 11
-                };
-                
-                Canvas.SetLeft(label, position.X + nodeWidth + 5);
-                Canvas.SetTop(label, position.Y - nodeHeight / 2);
-                CommitGraphCanvas.Children.Add(label);
+                if (commit.RefNames.Contains("master")) return "master";
+                if (commit.RefNames.Contains("main")) return "main";
+        
+                // Extract first branch name
+                var match = Regex.Match(commit.RefNames, @"branch:([^\s,]+)");
+                if (match.Success)
+                    return match.Groups[1].Value;
             }
-        }
-    }
-
-    Dictionary<string, Point> CalculateCommitPositions(List<CommitNode> commits, double horizontalSpacing, double rowHeight)
-    {
-        var positions = new Dictionary<string, Point>();
-        var branchLanes = new Dictionary<string, int>(); // Maps branch names to their horizontal lanes
-        var nextLaneIndex = 0;
-        
-        // Sort commits by date, newest first
-        var sortedCommits = commits.OrderByDescending(c => c.Date).ToList();
-        
-        // For each commit, assign to a row by index and a column based on branch
-        for (int i = 0; i < sortedCommits.Count; i++)
-        {
-            var commit = sortedCommits[i];
-            
-            // Determine the branch lane (column) for this commit
-            int lane;
-            string branchKey = GetBranchKey(commit);
-            
-            if (!branchLanes.TryGetValue(branchKey, out lane))
+    
+            // If we have parents, we can try to infer the branch
+            if (commit.Parents.Count > 0 && commit.Children.Count <= 1)
             {
-                lane = nextLaneIndex++;
-                branchLanes[branchKey] = lane;
+                // Stay on same branch as parent if possible
+                return GetBranchKey(commit.Parents[0]);
             }
-            
-            // Calculate X,Y position
-            double x = 20 + (lane * horizontalSpacing);
-            double y = 20 + (i * rowHeight);
-            
-            positions[commit.Hash] = new Point(x, y);
+    
+            // Fallback
+            return commit.Hash.Substring(0, 7);
         }
-        
-        return positions;
+        private Brush GetBranchColor(CommitNode commit)
+        {
+            // Map branch names to colors
+            string branchKey = GetBranchKey(commit);
+    
+            // Simple hash-based color selection from a predefined set
+            string[] colors =
+            {
+                "#3A86FF", "#FF006E", "#FB5607", "#FFBE0B",
+                "#8338EC", "#06D6A0", "#118AB2", "#EF476F"
+            };
+    
+            int colorIndex = Math.Abs(branchKey.GetHashCode()) % colors.Length;
+            return new SolidColorBrush((Color)ColorConverter.ConvertFromString(colors[colorIndex]));
+        }
     }
 
-    string GetBranchKey(CommitNode commit)
+    public class Repository
     {
-        // This is a simplified approach - a real implementation would be more sophisticated
-        // Ideally, we'd track branches through the commit graph
+        public string Path { get; }
+        public string Name { get; }
+    
+        public ObservableCollection<Branch> Branches { get; } = new ObservableCollection<Branch>();
+        public Branch CurrentBranch { get; set; }
+    
+        public ObservableCollection<FileChange> StagedChanges { get; } = new ObservableCollection<FileChange>();
+        public ObservableCollection<FileChange> UnstagedChanges { get; } = new ObservableCollection<FileChange>();
+    
+        public Repository(string path)
+        {
+            Path = path;
+            Name = System.IO.Path.GetFileName(path);
         
-        // If the commit has branch names, use that
-        if (!string.IsNullOrEmpty(commit.RefNames))
-            return commit.RefNames;
-            
-        // If it has parents, use the first parent's branch
-        if (commit.Parents.Count > 0)
-            return commit.Parents[0].Hash;
-            
-        // Fallback to using the commit hash itself
-        return commit.Hash;
-    }
-
-    Brush GetBranchColor(CommitNode commit)
-    {
-        // Simplified branch coloring - in a real implementation,
-        // would use commit.RefNames or branch analysis to determine colors
-        
-        // Use a hash code based on the branch key to pick a color
-        string branchKey = GetBranchKey(commit);
-        int colorIndex = Math.Abs(branchKey.GetHashCode()) % _branchColors.Length;
-        
-        return _branchColors[colorIndex];
-    }
+            // If the repository path ends with ".git", get the parent directory name
+            if (Name.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            {
+                Name = System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(path));
+            }
+        }
     }
 }
