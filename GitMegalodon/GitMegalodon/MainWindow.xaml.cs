@@ -4,11 +4,13 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Microsoft.WindowsAPICodePack.Dialogs;
@@ -26,6 +28,14 @@ namespace GitMegalodon
     /// </summary>
     public partial class MainWindow : Window
     {
+        // Windows 11 DWM API
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+        private const int DWMWA_MICA_EFFECT = 1029;
+
+        
         public ObservableCollection<string> RecentRepositories { get; set; }
         private Repository CurrentRepository { get; set; }
         private AppSettings Settings { get; set; }
@@ -52,8 +62,25 @@ namespace GitMegalodon
             // Load settings
             Settings = AppSettings.Load();
             LoadRecentRepositories();
+            
+            // Apply the customization after window is loaded
+            Loaded += MainWindow_Loaded;
         }
 
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            IntPtr windowHandle = new WindowInteropHelper(this).Handle;
+        
+            // Enable Mica effect
+            int micaValue = 1; // 1 for enable, 0 for disable
+            DwmSetWindowAttribute(windowHandle, DWMWA_MICA_EFFECT, ref micaValue, sizeof(int));
+        
+            // Optional: Use dark title bar
+            int darkModeValue = 1; // 1 for dark mode, 0 for light mode
+            DwmSetWindowAttribute(windowHandle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkModeValue, sizeof(int));
+        }
+
+        
         private void LoadRecentRepositories()
         {
             RecentRepositories.Clear();

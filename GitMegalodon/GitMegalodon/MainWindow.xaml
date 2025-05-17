@@ -6,6 +6,7 @@
         xmlns:local="clr-namespace:GitMegalodon"
         mc:Ignorable="d"
         Title="GitMegalodon" Height="800" Width="1200">
+    
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="250" />
