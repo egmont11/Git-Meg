@@ -9,8 +9,14 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="LibGit2Sharp" Version="0.31.0" />
       <PackageReference Include="MaterialDesignColors" Version="5.2.1" />
       <PackageReference Include="MaterialDesignThemes" Version="5.2.1" />
+      <PackageReference Include="WindowsAPICodePack-Shell" Version="1.1.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Models\" />
     </ItemGroup>
 
 </Project>
