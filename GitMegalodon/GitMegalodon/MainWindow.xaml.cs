@@ -20,4 +20,9 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
     }
+
+    private void OpenRepository(object sender, RoutedEventArgs e)
+    {
+        Console.WriteLine("Opening repository");
+    }
 }

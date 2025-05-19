@@ -5,8 +5,195 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:GitMegalodon"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="Git Megalodon" Height="800" Width="1200"
+        Background="#252526">
     <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250"/>  <!-- Levý panel pro repozitáře -->
+            <ColumnDefinition Width="*"/>    <!-- Hlavní obsah -->
+            <ColumnDefinition Width="300"/>  <!-- Detail commitu -->
+        </Grid.ColumnDefinitions>
 
+        <!-- Levý panel s repozitáři -->
+        <DockPanel Grid.Column="0" Background="#1E1E1E">
+            <StackPanel DockPanel.Dock="Top" Margin="10">
+                <Button Content="Nový repozitář" Margin="0,5" Padding="10,5"/>
+                <Button Content="Otevřít repozitář" Margin="0,5" Padding="10,5" Click="OpenRepository"/>
+            </StackPanel>
+            <TreeView Background="Transparent" Foreground="White">
+                <TreeViewItem Header="Lokální repozitáře" IsExpanded="True" Foreground="White">
+                    <TreeViewItem Header="Projekt 1" Foreground="White"/>
+                    <TreeViewItem Header="Projekt 2" Foreground="White"/>
+                </TreeViewItem>
+            </TreeView>
+        </DockPanel>
+
+        <!-- Hlavní obsah -->
+        <Grid Grid.Column="1" Background="#2D2D2D">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="200"/>
+            </Grid.RowDefinitions>
+
+            <!-- Toolbar -->
+            <ToolBar Grid.Row="0" Background="#333333">
+                <Button Content="Fetch" Margin="2"/>
+                <Button Content="Pull" Margin="2"/>
+                <Button Content="Push" Margin="2"/>
+                <Separator/>
+                <Button Content="Branch" Margin="2"/>
+                <Button Content="Merge" Margin="2"/>
+                <Separator/>
+                <ComboBox Width="150" Margin="2" SelectedIndex="0">
+                    <ComboBoxItem Content="main"/>
+                    <ComboBoxItem Content="develop"/>
+                </ComboBox>
+            </ToolBar>
+
+            <!-- Graf commitů -->
+            <Grid Grid.Row="1" Background="#2D2D2D">
+                <Canvas x:Name="CommitGraph">
+                    <!-- Ukázková vizualizace grafu commitů -->
+                    <Line X1="50" Y1="30" X2="50" Y2="400" Stroke="#444444" StrokeThickness="2"/>
+                    <Line X1="100" Y1="80" X2="100" Y2="400" Stroke="#444444" StrokeThickness="2"/>
+                    <Line X1="50" Y1="80" X2="100" Y2="80" Stroke="#444444" StrokeThickness="2"/>
+                    <Line X1="100" Y1="150" X2="150" Y2="150" Stroke="#444444" StrokeThickness="2"/>
+                    <Line X1="150" Y1="150" X2="150" Y2="300" Stroke="#444444" StrokeThickness="2"/>
+                    <Line X1="100" Y1="300" X2="150" Y2="300" Stroke="#444444" StrokeThickness="2"/>
+                    
+                    <!-- Commity -->
+                    <Ellipse Canvas.Left="45" Canvas.Top="25" Width="10" Height="10" Fill="#4CAF50"/>
+                    <Ellipse Canvas.Left="45" Canvas.Top="75" Width="10" Height="10" Fill="#4CAF50"/>
+                    <Ellipse Canvas.Left="95" Canvas.Top="75" Width="10" Height="10" Fill="#4CAF50"/>
+                    <Ellipse Canvas.Left="95" Canvas.Top="145" Width="10" Height="10" Fill="#4CAF50"/>
+                    <Ellipse Canvas.Left="145" Canvas.Top="145" Width="10" Height="10" Fill="#4CAF50"/>
+                    <Ellipse Canvas.Left="95" Canvas.Top="205" Width="10" Height="10" Fill="#4CAF50"/>
+                    <Ellipse Canvas.Left="145" Canvas.Top="240" Width="10" Height="10" Fill="#4CAF50"/>
+                    <Ellipse Canvas.Left="95" Canvas.Top="295" Width="10" Height="10" Fill="#4CAF50"/>
+                    <Ellipse Canvas.Left="145" Canvas.Top="295" Width="10" Height="10" Fill="#4CAF50"/>
+                    <Ellipse Canvas.Left="95" Canvas.Top="350" Width="10" Height="10" Fill="#4CAF50"/>
+                    <Ellipse Canvas.Left="45" Canvas.Top="350" Width="10" Height="10" Fill="#4CAF50"/>
+                    
+                    <!-- Popisky commitů -->
+                    <Border Canvas.Left="170" Canvas.Top="25" Background="#333333" CornerRadius="3" Padding="5,2">
+                        <TextBlock Text="Initial commit" Foreground="White"/>
+                    </Border>
+                    <Border Canvas.Left="170" Canvas.Top="75" Background="#333333" CornerRadius="3" Padding="5,2">
+                        <TextBlock Text="Add basic structure" Foreground="White"/>
+                    </Border>
+                    <Border Canvas.Left="170" Canvas.Top="145" Background="#333333" CornerRadius="3" Padding="5,2">
+                        <TextBlock Text="Implement login feature" Foreground="White"/>
+                    </Border>
+                    <Border Canvas.Left="170" Canvas.Top="205" Background="#333333" CornerRadius="3" Padding="5,2">
+                        <TextBlock Text="Fix security issue" Foreground="White"/>
+                    </Border>
+                    <Border Canvas.Left="170" Canvas.Top="295" Background="#333333" CornerRadius="3" Padding="5,2">
+                        <TextBlock Text="Merge feature/login" Foreground="White"/>
+                    </Border>
+                    <Border Canvas.Left="170" Canvas.Top="350" Background="#333333" CornerRadius="3" Padding="5,2">
+                        <TextBlock Text="Release v1.0" Foreground="White"/>
+                    </Border>
+                    
+                    <!-- Branch tagy -->
+                    <Border Canvas.Left="60" Canvas.Top="350" Background="#007ACC" CornerRadius="3" Padding="5,2">
+                        <TextBlock Text="main" Foreground="White" FontSize="10"/>
+                    </Border>
+                    <Border Canvas.Left="105" Canvas.Top="205" Background="#6A1B9A" CornerRadius="3" Padding="5,2">
+                        <TextBlock Text="develop" Foreground="White" FontSize="10"/>
+                    </Border>
+                    <Border Canvas.Left="155" Canvas.Top="240" Background="#D32F2F" CornerRadius="3" Padding="5,2">
+                        <TextBlock Text="feature/login" Foreground="White" FontSize="10"/>
+                    </Border>
+                </Canvas>
+                
+                <!-- Označení aktivního commitu -->
+                <Border BorderBrush="#FFB366" Background="#3A3A3A" BorderThickness="1" 
+                        HorizontalAlignment="Stretch" Margin="170,75,10,0" Height="25" VerticalAlignment="Top"/>
+            </Grid>
+
+            <!-- Panel změn -->
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                
+                <GroupBox Header="Změněné soubory" Foreground="White">
+                    <ListBox Background="Transparent" Foreground="White">
+                        <ListBoxItem Content="src/main/Program.cs" Foreground="LightGreen"/>
+                        <ListBoxItem Content="src/models/User.cs" Foreground="LightGreen"/>
+                        <ListBoxItem Content="src/utils/Helper.cs" Foreground="Yellow"/>
+                        <ListBoxItem Content="README.md" Foreground="LightBlue"/>
+                    </ListBox>
+                </GroupBox>
+                
+                <GroupBox Header="Diff" Grid.Column="1" Foreground="White">
+                    <ScrollViewer>
+                        <TextBlock Background="#1E1E1E" Foreground="White" TextWrapping="Wrap">
+                            <Run Text="@@ -1,7 +1,10 @@" Foreground="Gray"/>
+                            <LineBreak/>
+                            <Run Text="public class User" Foreground="White"/>
+                            <LineBreak/>
+                            <Run Text="" Foreground="White"/>
+                            <LineBreak/>
+                            <Run Text="    private string username;" Foreground="White"/>
+                            <LineBreak/>
+                            <Run Text="-    private string password;" Foreground="Red"/>
+                            <LineBreak/>
+                            <Run Text="+    private string hashedPassword;" Foreground="Green"/>
+                            <LineBreak/>
+                            <Run Text="+    " Foreground="Green"/>
+                            <LineBreak/>
+                            <Run Text="+    public bool IsAuthenticated { get; private set; }" Foreground="Green"/>
+                            <LineBreak/>
+                            <Run Text="    " Foreground="White"/>
+                            <LineBreak/>
+                            <Run Text="    public User(string name)" Foreground="White"/>
+                            <LineBreak/>
+                            <Run Text="    {" Foreground="White"/>
+                        </TextBlock>
+                    </ScrollViewer>
+                </GroupBox>
+            </Grid>
+        </Grid>
+
+        <!-- Detail commitu -->
+        <DockPanel Grid.Column="2" Background="#1E1E1E">
+            <TextBlock DockPanel.Dock="Top" Padding="10" Foreground="White"
+                       Text="Detail commitu" FontWeight="Bold"/>
+            
+            <StackPanel DockPanel.Dock="Top" Margin="10">
+                <TextBlock Foreground="White" Text="Commit Hash:" Margin="0,5"/>
+                <TextBox IsReadOnly="True" Background="#2D2D2D" Foreground="#FFB366" 
+                         Text="a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"/>
+                
+                <TextBlock Foreground="White" Text="Autor:" Margin="0,5"/>
+                <TextBox IsReadOnly="True" Background="#2D2D2D" Foreground="White"
+                         Text="Jan Novák &lt;jan.novak@example.com&gt;"/>
+                
+                <TextBlock Foreground="White" Text="Datum:" Margin="0,5"/>
+                <TextBox IsReadOnly="True" Background="#2D2D2D" Foreground="White"
+                         Text="24. 7. 2023 14:32:45"/>
+                
+                <TextBlock Foreground="White" Text="Commit message:" Margin="0,5"/>
+                <TextBox IsReadOnly="True" Background="#2D2D2D" Foreground="White"
+                         Height="100" TextWrapping="Wrap" AcceptsReturn="True"
+                         Text="Implementace přihlašovací obrazovky&#x0a;&#x0a;- Přidána validace hesla&#x0a;- Přidáno hashování hesla pro zvýšení bezpečnosti&#x0a;- Opravena chyba při kontrole uživatelských oprávnění"/>
+                
+                <TextBlock Foreground="White" Text="Změněné soubory:" Margin="0,5"/>
+                <ListBox Height="150" Background="#2D2D2D" Foreground="White">
+                    <ListBoxItem Content="src/main/Program.cs"/>
+                    <ListBoxItem Content="src/models/User.cs"/>
+                    <ListBoxItem Content="src/utils/Helper.cs"/>
+                    <ListBoxItem Content="README.md"/>
+                </ListBox>
+                
+                <StackPanel Orientation="Horizontal" Margin="0,10">
+                    <Button Content="Cherry-pick" Margin="0,0,5,0" Padding="10,3"/>
+                    <Button Content="Revert" Margin="5,0,0,0" Padding="10,3"/>
+                </StackPanel>
+            </StackPanel>
+        </DockPanel>
     </Grid>
 </Window>
