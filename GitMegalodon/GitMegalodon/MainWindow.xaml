@@ -17,7 +17,8 @@
         <!-- Levý panel s repozitáři -->
         <DockPanel Grid.Column="0" Background="#1E1E1E">
             <StackPanel DockPanel.Dock="Top" Margin="10">
-                <Button Content="Nový repozitář" Margin="0,5" Padding="10,5"/>
+                <Button Content="Nový repozitář" Margin="0,5" Padding="10,5" Click="NewRepository"/>
+                <Button Content="Klonovat repozitář" Margin="0,5" Padding="10,5" Click="CloneRepository"/>
                 <Button Content="Otevřít repozitář" Margin="0,5" Padding="10,5" Click="OpenRepository"/>
             </StackPanel>
             <TreeView Background="Transparent" Foreground="White">
@@ -38,12 +39,9 @@
 
             <!-- Toolbar -->
             <ToolBar Grid.Row="0" Background="#333333">
-                <Button Content="Fetch" Margin="2"/>
-                <Button Content="Pull" Margin="2"/>
-                <Button Content="Push" Margin="2"/>
-                <Separator/>
-                <Button Content="Branch" Margin="2"/>
-                <Button Content="Merge" Margin="2"/>
+                <Button Content="Fetch" Margin="2" Click="FetchRepository"/>
+                <Button Content="Pull" Margin="2" Click="PullRepository"/>
+                <Button Content="Push" Margin="2" Click="PushRepository"/>
                 <Separator/>
                 <ComboBox Width="150" Margin="2" SelectedIndex="0">
                     <ComboBoxItem Content="main"/>
